@@ -785,9 +785,8 @@ export default function AnalisisEficaciaPage() {
                 <FileUpload
                   onFilesChange={handleFileChange}
                   maxFiles={1}
-                  acceptedFileTypes={['.pdf']}
-                  title="Seleccionar archivo de declaración de renta"
-                  description="Sube el archivo PDF de la declaración de renta para extraer automáticamente todos los datos."
+                  acceptedTypes={['application/pdf']}
+                  maxFileSize={50}
                 />
 
                 {uploadProgress && (
