@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import { RutDetails } from '@/lib/api/rut-service'
+import { ComparativeAnalysisResponse, VariationAnalysis } from '@/lib/api/comparative-analysis-service'
 
 export interface ExcelExportData {
   rutDetails: RutDetails[]
@@ -186,5 +187,211 @@ export class ExcelExportService {
     }
 
     await this.exportToExcel(rutosListos)
+  }
+
+  // Función para formatear moneda
+  private static formatCurrency(value: number): string {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(value)
+  }
+
+  // Función para crear la hoja resumen ejecutivo
+  private static createSummarySheet(data: ComparativeAnalysisResponse): any[][] {
+    const summary = [
+      ['ANÁLISIS COMPARATIVO DE DECLARACIONES DE RENTA'],
+      [''],
+      ['Información General'],
+      ['NIT:', data.nit],
+      ['Razón Social:', data.razon_social],
+      ['Año Anterior:', data.previous_year],
+      ['Año Actual:', data.current_year],
+      ['Fecha de Análisis:', new Date(data.analysis_timestamp).toLocaleString('es-CO')],
+      ['Estado:', data.message],
+      [''],
+      ['Resumen Ejecutivo'],
+      ['Campo', 'Año Anterior', 'Año Actual', 'Variación Nominal', 'Variación %'],
+      [
+        'Patrimonio Bruto',
+        this.formatCurrency(data.patrimonio_analysis.previous_value),
+        this.formatCurrency(data.patrimonio_analysis.current_value),
+        this.formatCurrency(data.patrimonio_analysis.nominal_variation),
+        data.patrimonio_analysis.variation_percentage
+      ],
+      [
+        'Total Ingresos Netos',
+        this.formatCurrency(data.ingresos_analysis.previous_value),
+        this.formatCurrency(data.ingresos_analysis.current_value),
+        this.formatCurrency(data.ingresos_analysis.nominal_variation),
+        data.ingresos_analysis.variation_percentage
+      ],
+      [
+        'Total Costos y Gastos',
+        this.formatCurrency(data.gastos_analysis.previous_value),
+        this.formatCurrency(data.gastos_analysis.current_value),
+        this.formatCurrency(data.gastos_analysis.nominal_variation),
+        data.gastos_analysis.variation_percentage
+      ],
+      [
+        'Renta Líquida',
+        this.formatCurrency(data.renta_liquida_analysis.previous_value),
+        this.formatCurrency(data.renta_liquida_analysis.current_value),
+        this.formatCurrency(data.renta_liquida_analysis.nominal_variation),
+        data.renta_liquida_analysis.variation_percentage
+      ],
+      [
+        'Impuesto sobre Renta',
+        this.formatCurrency(data.impuesto_analysis.previous_value),
+        this.formatCurrency(data.impuesto_analysis.current_value),
+        this.formatCurrency(data.impuesto_analysis.nominal_variation),
+        data.impuesto_analysis.variation_percentage
+      ]
+    ]
+
+    // Agregar estadísticas si están disponibles
+    if (data.summary && Object.keys(data.summary).length > 0) {
+      summary.push([''])
+      summary.push(['Estadísticas Generales'])
+
+      if (data.summary.total_fields_analyzed) {
+        summary.push(['Total de campos analizados:', data.summary.total_fields_analyzed])
+      }
+      if (data.summary.fields_with_increases) {
+        summary.push(['Campos con incremento:', data.summary.fields_with_increases])
+      }
+      if (data.summary.fields_with_decreases) {
+        summary.push(['Campos con disminución:', data.summary.fields_with_decreases])
+      }
+      if (data.summary.fields_unchanged) {
+        summary.push(['Campos sin cambio:', data.summary.fields_unchanged])
+      }
+    }
+
+    // Agregar insights clave
+    if (data.summary?.key_insights && Array.isArray(data.summary.key_insights)) {
+      summary.push([''])
+      summary.push(['Insights Clave'])
+      data.summary.key_insights.forEach((insight: string) => {
+        summary.push([insight])
+      })
+    }
+
+    return summary
+  }
+
+  // Función para crear la hoja de análisis detallado
+  private static createDetailedSheet(data: ComparativeAnalysisResponse): any[][] {
+    const headers = [
+      'Campo',
+      'Línea',
+      'Año Anterior',
+      'Año Actual',
+      'Variación Nominal',
+      'Variación Relativa (%)',
+      'Variación Porcentual'
+    ]
+
+    const detailData = [headers]
+
+    data.all_variations.forEach((variation: VariationAnalysis) => {
+      detailData.push([
+        variation.field_name,
+        variation.line_number,
+        this.formatCurrency(variation.previous_value),
+        this.formatCurrency(variation.current_value),
+        this.formatCurrency(variation.nominal_variation),
+        variation.relative_variation ? variation.relative_variation.toFixed(2) + '%' : 'N/A',
+        variation.variation_percentage
+      ])
+    })
+
+    return detailData
+  }
+
+  // Función para crear hoja de cambios principales
+  private static createMajorChangesSheet(data: ComparativeAnalysisResponse): any[][] {
+    if (!data.summary?.major_changes || !Array.isArray(data.summary.major_changes)) {
+      return [['No hay cambios principales disponibles']]
+    }
+
+    const headers = ['Campo', 'Variación', 'Impacto']
+    const changesData = [headers]
+
+    data.summary.major_changes.forEach((change: any) => {
+      changesData.push([
+        change.field,
+        change.change,
+        change.impact
+      ])
+    })
+
+    return changesData
+  }
+
+  // Función principal para exportar análisis comparativo
+  public static async exportComparativeAnalysis(data: ComparativeAnalysisResponse): Promise<void> {
+    try {
+      // Crear workbook
+      const workbook = XLSX.utils.book_new()
+
+      // Crear hoja de resumen ejecutivo
+      const summaryData = this.createSummarySheet(data)
+      const summaryWorksheet = XLSX.utils.aoa_to_sheet(summaryData)
+
+      // Configurar anchos de columna para resumen
+      summaryWorksheet['!cols'] = [
+        { wch: 25 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 15 }
+      ]
+
+      XLSX.utils.book_append_sheet(workbook, summaryWorksheet, 'Resumen Ejecutivo')
+
+      // Crear hoja de análisis detallado
+      const detailedData = this.createDetailedSheet(data)
+      const detailedWorksheet = XLSX.utils.aoa_to_sheet(detailedData)
+
+      // Configurar anchos de columna para detallado
+      detailedWorksheet['!cols'] = [
+        { wch: 25 },
+        { wch: 8 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 15 },
+        { wch: 15 }
+      ]
+
+      XLSX.utils.book_append_sheet(workbook, detailedWorksheet, 'Análisis Detallado')
+
+      // Crear hoja de cambios principales
+      const changesData = this.createMajorChangesSheet(data)
+      const changesWorksheet = XLSX.utils.aoa_to_sheet(changesData)
+
+      // Configurar anchos de columna para cambios
+      changesWorksheet['!cols'] = [
+        { wch: 30 },
+        { wch: 15 },
+        { wch: 25 }
+      ]
+
+      XLSX.utils.book_append_sheet(workbook, changesWorksheet, 'Cambios Principales')
+
+      // Generar nombre de archivo
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')
+      const fileName = `Analisis_Comparativo_${data.nit}_${data.previous_year}_vs_${data.current_year}_${timestamp}.xlsx`
+
+      // Exportar archivo
+      XLSX.writeFile(workbook, fileName)
+
+    } catch (error) {
+      console.error('Error al exportar análisis comparativo:', error)
+      throw new Error('Error al generar el archivo Excel del análisis comparativo')
+    }
   }
 }

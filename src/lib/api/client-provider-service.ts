@@ -73,11 +73,21 @@ export interface CreateClientProviderRequest {
 }
 
 class ClientProviderService {
-  private baseUrl = 'http://localhost:8001/api/v1'
+  private baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'
+
+  private getHeaders(): HeadersInit {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
+      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
+    }
+  }
 
   async getClientProviders(tipoEntidad: 'CLIENTE' | 'PROVEEDOR'): Promise<ClientProviderResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/clientes-proveedores/?tipo_entidad=${tipoEntidad}`)
+      const response = await fetch(`${this.baseUrl}/clientes-proveedores/?tipo_entidad=${tipoEntidad}`, {
+        headers: this.getHeaders()
+      })
 
       if (!response.ok) {
         throw new Error(`Error HTTP ${response.status}: ${response.statusText}`)
@@ -97,9 +107,7 @@ class ClientProviderService {
     try {
       const response = await fetch(`${this.baseUrl}/clientes-proveedores/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(data)
       })
 
@@ -128,7 +136,9 @@ class ClientProviderService {
 
   async getClientProviderRuts(clientProviderId: number): Promise<ClientProviderRutsResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/clientes-proveedores/${clientProviderId}/ruts`)
+      const response = await fetch(`${this.baseUrl}/clientes-proveedores/${clientProviderId}/ruts`, {
+        headers: this.getHeaders()
+      })
 
       if (!response.ok) {
         throw new Error(`Error HTTP ${response.status}: ${response.statusText}`)

@@ -62,7 +62,14 @@ export interface UploadProgress {
 }
 
 class InvoiceService {
-  private baseUrl = 'http://localhost:8001/api/v1/contabilidad'
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/contabilidad`
+
+  private getAuthHeaders(): Record<string, string> {
+    return {
+      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
+      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
+    }
+  }
 
   async extractInvoiceData(
     file: File,
@@ -126,8 +133,12 @@ class InvoiceService {
       xhr.open('POST', `${this.baseUrl}/extraer/factura`, true)
       xhr.timeout = 300000 // 5 minutes timeout
 
-      // Add headers for CORS
+      // Add headers for CORS and Authentication
       xhr.setRequestHeader('Accept', 'application/json')
+      const authHeaders = this.getAuthHeaders()
+      Object.entries(authHeaders).forEach(([key, value]) => {
+        xhr.setRequestHeader(key, value)
+      })
 
       // Don't set Content-Type - let browser set it with boundary for multipart/form-data
       xhr.send(formData)

@@ -116,7 +116,15 @@ export interface UploadProgress {
 }
 
 class RutService {
-  private baseUrl = 'http://localhost:8001/api/v1/contabilidad'
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/contabilidad`
+
+  private getHeaders(): HeadersInit {
+    return {
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
+      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
+    }
+  }
 
   async extractRutFromFilesWithClient(
     files: File[],
@@ -145,6 +153,10 @@ class RutService {
       const response = await fetch(`${this.baseUrl}/extraer/rut/lote/con-cliente`, {
         method: 'POST',
         body: formData,
+        headers: {
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
+          'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
+        }
       })
 
       if (!response.ok) {
@@ -192,6 +204,8 @@ class RutService {
         headers: {
           // Don't set Content-Type, let browser set it with boundary
           'Accept': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
+          'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
         }
       })
 
@@ -274,8 +288,10 @@ class RutService {
       xhr.open('POST', `${this.baseUrl}/extraer/rut/lote`, true)
       xhr.timeout = 300000 // 5 minutes timeout
 
-      // Add headers for CORS
+      // Add headers for CORS and Authentication
       xhr.setRequestHeader('Accept', 'application/json')
+      xhr.setRequestHeader('Authorization', `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`)
+      xhr.setRequestHeader('x-user-id', process.env.NEXT_PUBLIC_USER_ID || '')
 
       // Don't set Content-Type - let browser set it with boundary for multipart/form-data
       xhr.send(formData)
@@ -286,9 +302,7 @@ class RutService {
     try {
       const response = await fetch(`${this.baseUrl}/ruts?page=${page}&page_size=${pageSize}`, {
         method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        }
+        headers: this.getHeaders()
       })
 
       if (!response.ok) {

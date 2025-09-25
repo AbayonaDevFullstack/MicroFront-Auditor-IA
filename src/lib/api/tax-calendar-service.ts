@@ -33,7 +33,15 @@ export interface PersonaJuridicaResponse {
 }
 
 class TaxCalendarService {
-  private baseUrl = 'http://localhost:8001/api/v1/tax-calendar'
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/tax-calendar`
+
+  private getHeaders(): HeadersInit {
+    return {
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
+      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
+    }
+  }
 
   async getGrandesContribuyentesCalendar(
     anoGravable: number,
@@ -44,9 +52,7 @@ class TaxCalendarService {
         `${this.baseUrl}/grandes-contribuyentes?ano_gravable=${anoGravable}&ultimo_digito_nit=${ultimoDigitoNit}`,
         {
           method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          }
+          headers: this.getHeaders()
         }
       )
 
@@ -81,9 +87,7 @@ class TaxCalendarService {
         `${this.baseUrl}/personas-juridicas?ano_gravable=${anoGravable}&ultimo_digito_nit=${ultimoDigitoNit}`,
         {
           method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          }
+          headers: this.getHeaders()
         }
       )
 
@@ -115,9 +119,7 @@ class TaxCalendarService {
         `${this.baseUrl}/grandes-contribuyentes`,
         {
           method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          }
+          headers: this.getHeaders()
         }
       )
 
@@ -149,9 +151,7 @@ class TaxCalendarService {
         `${this.baseUrl}/personas-juridicas`,
         {
           method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          }
+          headers: this.getHeaders()
         }
       )
 

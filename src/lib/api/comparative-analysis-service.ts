@@ -40,7 +40,15 @@ export interface UploadProgress {
 }
 
 class ComparativeAnalysisService {
-  private baseUrl = 'http://localhost:8001/api/v1/compliance'
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/compliance`
+
+  private getHeaders(): HeadersInit {
+    return {
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
+      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
+    }
+  }
 
   async analyzeDeclarationComparative(
     currentYearFile: File,
@@ -64,9 +72,7 @@ class ComparativeAnalysisService {
         method: 'POST',
         body: formData,
         mode: 'cors',
-        headers: {
-          'Accept': 'application/json',
-        }
+        headers: this.getHeaders()
       })
 
       if (!response.ok) {
@@ -155,8 +161,10 @@ class ComparativeAnalysisService {
       xhr.open('POST', `${this.baseUrl}/analyze/declaration/comparative`, true)
       xhr.timeout = 600000 // 10 minutes timeout
 
-      // Add headers for CORS
+      // Add headers for CORS and Authentication
       xhr.setRequestHeader('Accept', 'application/json')
+      xhr.setRequestHeader('Authorization', `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`)
+      xhr.setRequestHeader('x-user-id', process.env.NEXT_PUBLIC_USER_ID || '')
 
       // Don't set Content-Type - let browser set it with boundary for multipart/form-data
       xhr.send(formData)

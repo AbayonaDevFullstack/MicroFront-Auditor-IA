@@ -4,6 +4,7 @@ import { useState } from "react"
 import { TrendingUp, TrendingDown, Minus, Building, Calendar, X, Download, FileSpreadsheet, BarChart3 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ComparativeAnalysisResponse, VariationAnalysis } from "@/lib/api/comparative-analysis-service"
+import { ExcelExportService } from "@/lib/services/excel-export"
 
 interface ComparativeAnalysisResultsProps {
   results: ComparativeAnalysisResponse
@@ -118,6 +119,22 @@ function AnalysisCard({ title, analysis, icon }: AnalysisCardProps) {
 
 export function ComparativeAnalysisResults({ results, onClose }: ComparativeAnalysisResultsProps) {
   const [selectedTab, setSelectedTab] = useState<'summary' | 'details'>('summary')
+  const [isExporting, setIsExporting] = useState(false)
+
+  const handleExport = async () => {
+    setIsExporting(true)
+    try {
+      await ExcelExportService.exportComparativeAnalysis(results)
+      // Opcional: mostrar mensaje de éxito
+      console.log('Archivo Excel exportado exitosamente')
+    } catch (error) {
+      console.error('Error al exportar a Excel:', error)
+      // Opcional: mostrar mensaje de error al usuario
+      alert('Error al exportar a Excel. Por favor, inténtalo de nuevo.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -330,9 +347,13 @@ export function ComparativeAnalysisResults({ results, onClose }: ComparativeAnal
             <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-foreground">Análisis Detallado de Variaciones</h3>
-                <button className="flex items-center gap-2 px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
+                <button
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className="flex items-center gap-2 px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <Download className="h-4 w-4" />
-                  Exportar
+                  {isExporting ? 'Exportando...' : 'Exportar'}
                 </button>
               </div>
             </div>

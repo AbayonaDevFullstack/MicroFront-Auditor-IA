@@ -101,7 +101,15 @@ export interface UploadProgress {
 }
 
 class DeclarationService {
-  private baseUrl = 'http://localhost:8001/api/v1/compliance'
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/compliance`
+
+  private getHeaders(): HeadersInit {
+    return {
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
+      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
+    }
+  }
 
   async extractDeclarationData(
     file: File,
@@ -119,9 +127,7 @@ class DeclarationService {
         method: 'POST',
         body: formData,
         mode: 'cors',
-        headers: {
-          'Accept': 'application/json',
-        }
+        headers: this.getHeaders()
       })
 
       if (!response.ok) {
