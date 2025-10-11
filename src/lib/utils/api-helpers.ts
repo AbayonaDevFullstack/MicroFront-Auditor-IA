@@ -1,3 +1,5 @@
+import { authService } from '@/lib/services/auth-service';
+
 /**
  * Obtiene credenciales de autenticación desde sessionStorage o localStorage
  */
