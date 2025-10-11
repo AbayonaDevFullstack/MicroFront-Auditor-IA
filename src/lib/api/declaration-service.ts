@@ -1,3 +1,5 @@
+import { getAuthHeaders } from '@/lib/utils/api-helpers'
+
 // Types for Declaration extraction API response
 export interface ContribuyenteInfo {
   clasificacion: string
@@ -101,15 +103,7 @@ export interface UploadProgress {
 }
 
 class DeclarationService {
-  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/compliance`
-
-  private getHeaders(): HeadersInit {
-    return {
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
-      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
-    }
-  }
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'}/api/v1/compliance`
 
   async extractDeclarationData(
     file: File,
@@ -123,11 +117,14 @@ class DeclarationService {
     formData.append('declaration_file', file)
 
     try {
+      const authHeaders = getAuthHeaders()
+      const { 'Content-Type': _, ...headersWithoutContentType } = authHeaders as Record<string, string>
+
       const response = await fetch(`${this.baseUrl}/extract/declaration/detailed`, {
         method: 'POST',
         body: formData,
         mode: 'cors',
-        headers: this.getHeaders()
+        headers: headersWithoutContentType
       })
 
       if (!response.ok) {
@@ -208,8 +205,13 @@ class DeclarationService {
       xhr.open('POST', `${this.baseUrl}/extract/declaration/detailed`, true)
       xhr.timeout = 300000 // 5 minutes timeout
 
-      // Add headers for CORS
-      xhr.setRequestHeader('Accept', 'application/json')
+      // Add headers for CORS and Authentication
+      const authHeaders = getAuthHeaders() as Record<string, string>
+      Object.entries(authHeaders).forEach(([key, value]) => {
+        if (key !== 'Content-Type') {
+          xhr.setRequestHeader(key, value)
+        }
+      })
 
       // Don't set Content-Type - let browser set it with boundary for multipart/form-data
       xhr.send(formData)

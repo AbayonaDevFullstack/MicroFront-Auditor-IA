@@ -37,7 +37,9 @@ export class ExcelExportService {
     return `${year}${month}${day}`
   }
 
-  private static createClientesData(rutDetails: RutDetails[]): any[][] {
+  private static createClientesData(rutDetails: RutDetails[], codigoEmpresa?: string): any[][] {
+    console.log('createClientesData - codigoEmpresa received:', codigoEmpresa)
+
     // Headers para la hoja Clientes
     const headers = [
       'Compañía',
@@ -66,8 +68,11 @@ export class ExcelExportService {
         ? rut.representantes_legales[0].fecha_inicio_ejercicio || ''
         : ''
 
+      const companiaValue = codigoEmpresa || '1'
+      console.log('Row compania value:', companiaValue)
+
       const row = [
-        '1', // Compañía - valor predeterminado
+        companiaValue, // Compañía - usar codigo_empresa o valor predeterminado
         rut.nit, // Código del cliente
         rut.razon_social, // Razón social del cliente
         this.getCurrencyByCountry(rut.pais), // Moneda basada en país
@@ -121,13 +126,15 @@ export class ExcelExportService {
     }
   }
 
-  public static async exportToExcel(rutDetails: RutDetails[]): Promise<void> {
+  public static async exportToExcel(rutDetails: RutDetails[], codigoEmpresa?: string): Promise<void> {
+    console.log('exportToExcel - codigoEmpresa parameter:', codigoEmpresa)
+
     try {
       // Cargar el template o crear workbook básico
       const workbook = await this.loadTemplateFile()
 
       // Crear datos para la hoja Clientes
-      const clientesData = this.createClientesData(rutDetails)
+      const clientesData = this.createClientesData(rutDetails, codigoEmpresa)
 
       // Crear la hoja de Clientes con los datos
       const clientesWorksheet = XLSX.utils.aoa_to_sheet(clientesData)

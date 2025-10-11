@@ -1,21 +1,27 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
-import { Users, Building, UserCheck, Truck, ChevronDown, Loader2, Upload, FileText, CheckCircle, AlertTriangle } from "lucide-react"
+import React, { useState, useEffect, useRef } from "react"
+import { Users, Building, UserCheck, Truck, ChevronDown, Loader2, FileText, CheckCircle, AlertTriangle, Download } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { clientProviderService, ClientProvider, ClientProviderResponse } from "@/lib/api/client-provider-service"
-import { rutService, RutExtractionWithClientResponse, UploadProgress } from "@/lib/api/rut-service"
+import { rutService, RutExtractionWithClientResponse, UploadProgress, RutDetails } from "@/lib/api/rut-service"
+import { accountingClientService, AccountingClient } from "@/lib/api/accounting-client-service"
 import { FileUpload } from "@/components/ui/file-upload"
 import { RutResults } from "@/components/ui/rut-results"
+import { ExcelExportService } from "@/lib/services/excel-export"
 
 type TerceroType = 'cliente' | 'proveedor'
 
 export default function TercerosPage() {
-  const [selectedType, setSelectedType] = useState<TerceroType>('cliente')
-  const [clientProviders, setClientProviders] = useState<ClientProvider[]>([])
-  const [selectedClientProvider, setSelectedClientProvider] = useState<ClientProvider | null>(null)
-  const [isLoadingList, setIsLoadingList] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // Ref to prevent duplicate API calls in StrictMode
+  const hasFetchedClients = useRef(false)
+
+  // Accounting client states
+  const [accountingClients, setAccountingClients] = useState<AccountingClient[]>([])
+  const [selectedAccountingClient, setSelectedAccountingClient] = useState<AccountingClient | null>(null)
+  const [isLoadingAccountingClients, setIsLoadingAccountingClients] = useState(false)
+  const [accountingError, setAccountingError] = useState<string | null>(null)
+
+  const [selectedType, setSelectedType] = useState<TerceroType | null>(null)
 
   // RUT extraction states
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -24,42 +30,35 @@ export default function TercerosPage() {
   const [extractionResults, setExtractionResults] = useState<RutExtractionWithClientResponse | null>(null)
   const [extractionError, setExtractionError] = useState<string | null>(null)
 
-  // Load client providers when type changes
-  useEffect(() => {
-    loadClientProviders()
-  }, [selectedType])
-
-  const loadClientProviders = async () => {
-    setIsLoadingList(true)
-    setError(null)
-    setSelectedClientProvider(null)
+  const loadAccountingClients = async () => {
+    setIsLoadingAccountingClients(true)
+    setAccountingError(null)
 
     try {
-      const response = await clientProviderService.getClientProviders(
-        selectedType === 'cliente' ? 'CLIENTE' : 'PROVEEDOR'
-      )
-      setClientProviders(response.items)
+      const response = await accountingClientService.getAccountingClients()
+      setAccountingClients(response.items)
     } catch (error) {
-      console.error('Error loading client providers:', error)
-      setError(error instanceof Error ? error.message : 'Error al cargar la lista')
-      setClientProviders([])
+      console.error('Error loading accounting clients:', error)
+      setAccountingError(error instanceof Error ? error.message : 'Error al cargar clientes de contabilidad')
+      setAccountingClients([])
     } finally {
-      setIsLoadingList(false)
+      setIsLoadingAccountingClients(false)
     }
+  }
+
+  const handleAccountingClientChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedId = event.target.value
+    const client = accountingClients.find(ac => ac.id === selectedId)
+    setSelectedAccountingClient(client || null)
+    // Reset everything when changing accounting client
+    setSelectedType(null)
+    setSelectedFiles([])
+    setExtractionResults(null)
+    setExtractionError(null)
   }
 
   const handleTypeChange = (type: TerceroType) => {
     setSelectedType(type)
-  }
-
-  const handleClientProviderChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedId = parseInt(event.target.value)
-    const provider = clientProviders.find(cp => cp.id === selectedId)
-    setSelectedClientProvider(provider || null)
-    // Reset extraction states when changing client/provider
-    setSelectedFiles([])
-    setExtractionResults(null)
-    setExtractionError(null)
   }
 
   const handleFilesChange = (files: any[]) => {
@@ -70,8 +69,8 @@ export default function TercerosPage() {
   }
 
   const handleStartExtraction = async () => {
-    if (!selectedClientProvider) {
-      setExtractionError('Debe seleccionar un cliente/proveedor primero')
+    if (!selectedAccountingClient) {
+      setExtractionError('Debe seleccionar un cliente de contabilidad primero')
       return
     }
 
@@ -88,7 +87,7 @@ export default function TercerosPage() {
     try {
       const response = await rutService.extractRutFromFilesWithClient(
         selectedFiles,
-        selectedClientProvider.id,
+        parseInt(selectedAccountingClient.codigo_empresa),
         (progress) => {
           setExtractionProgress(progress)
         }
@@ -103,6 +102,61 @@ export default function TercerosPage() {
       setExtractionProgress(null)
     }
   }
+
+  const handleGenerateExcel = async () => {
+    if (!extractionResults || !selectedAccountingClient) {
+      return
+    }
+
+    try {
+      console.log('Selected Accounting Client:', selectedAccountingClient)
+      console.log('Codigo Empresa:', selectedAccountingClient.codigo_empresa)
+
+      // Convertir los resultados al formato RutDetails
+      const rutDetails: RutDetails[] = extractionResults.results
+        .filter(result => result.success && result.data)
+        .map(result => {
+          const rutData = result.data!.rut_data
+          return {
+            id: 0, // No tenemos ID aún
+            nit: rutData.nit,
+            dv: rutData.dv,
+            numero_formulario: rutData.numero_formulario,
+            razon_social: rutData.razon_social,
+            nombre_comercial: rutData.nombre_comercial,
+            tipo_contribuyente: rutData.tipo_contribuyente,
+            pais: rutData.pais,
+            departamento: rutData.departamento,
+            ciudad_municipio: rutData.ciudad_municipio,
+            direccion_principal: rutData.direccion_principal,
+            telefono_1: rutData.telefono_1,
+            correo_electronico: rutData.correo_electronico,
+            actividad_principal_codigo: rutData.actividad_principal_codigo,
+            processing_state: 'LISTO',
+            representantes_legales: rutData.representantes_legales,
+            created_at: rutData.extraction_timestamp,
+            updated_at: null,
+            original_filename: result.filename
+          }
+        })
+
+      // Pasar el codigo_empresa del cliente de contabilidad seleccionado
+      console.log('Calling exportToExcel with codigo_empresa:', selectedAccountingClient.codigo_empresa)
+      await ExcelExportService.exportToExcel(rutDetails, selectedAccountingClient.codigo_empresa)
+    } catch (error) {
+      console.error('Error generating Excel:', error)
+      setExtractionError(error instanceof Error ? error.message : 'Error al generar el archivo Excel')
+    }
+  }
+
+  // Load accounting clients on mount
+  useEffect(() => {
+    if (!hasFetchedClients.current) {
+      hasFetchedClients.current = true
+      loadAccountingClients()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -121,7 +175,80 @@ export default function TercerosPage() {
         </div>
       </div>
 
-      {/* Tipo de Tercero Selector */}
+      {/* Accounting Client Selector - FIRST ELEMENT */}
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">Cliente de Contabilidad</h3>
+            <p className="text-sm text-muted-foreground">
+              Selecciona el cliente de contabilidad para el cual realizarás la gestión de terceros
+            </p>
+          </div>
+
+          {accountingError && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-sm text-red-800 dark:text-red-200">{accountingError}</p>
+            </div>
+          )}
+
+          <div className="relative">
+            <select
+              value={selectedAccountingClient?.id || ''}
+              onChange={handleAccountingClientChange}
+              disabled={isLoadingAccountingClients || accountingClients.length === 0}
+              className={cn(
+                "w-full px-4 py-3 pr-10 text-sm border border-gray-300 dark:border-gray-600 rounded-lg",
+                "bg-white dark:bg-gray-800 text-foreground",
+                "focus:ring-2 focus:ring-purple-500 focus:border-purple-500",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
+                "appearance-none"
+              )}
+            >
+              <option value="">
+                {isLoadingAccountingClients
+                  ? 'Cargando clientes...'
+                  : accountingClients.length === 0
+                    ? 'No hay clientes disponibles'
+                    : 'Selecciona un cliente de contabilidad'
+                }
+              </option>
+              {accountingClients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.razon_social} - {client.nit}
+                </option>
+              ))}
+            </select>
+
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              {isLoadingAccountingClients ? (
+                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-gray-400" />
+              )}
+            </div>
+          </div>
+
+          {selectedAccountingClient && (
+            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  <Building className="h-4 w-4 text-purple-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">{selectedAccountingClient.razon_social}</p>
+                  <p className="text-xs text-muted-foreground">
+                    NIT: {selectedAccountingClient.nit} • Código: {selectedAccountingClient.codigo_empresa}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Tipo de Tercero Selector - Only show if accounting client is selected */}
+      {selectedAccountingClient && (
+      <>
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
         <div className="space-y-4">
           <div>
@@ -160,6 +287,7 @@ export default function TercerosPage() {
           </div>
 
           {/* Selected Type Display */}
+          {selectedType && (
           <div className="flex items-center gap-3 pt-2">
             <div className={cn(
               "w-8 h-8 rounded-lg flex items-center justify-center",
@@ -185,121 +313,12 @@ export default function TercerosPage() {
               </p>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Client/Provider Selector */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-lg font-semibold text-foreground">
-              Seleccionar {selectedType === 'cliente' ? 'Cliente' : 'Proveedor'}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Elige el {selectedType} específico que deseas gestionar
-            </p>
-          </div>
-
-          {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-            </div>
-          )}
-
-          <div className="relative">
-            <select
-              value={selectedClientProvider?.id || ''}
-              onChange={handleClientProviderChange}
-              disabled={isLoadingList || clientProviders.length === 0}
-              className={cn(
-                "w-full px-4 py-3 pr-10 text-sm border border-gray-300 dark:border-gray-600 rounded-lg",
-                "bg-white dark:bg-gray-800 text-foreground",
-                "focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
-                "disabled:opacity-50 disabled:cursor-not-allowed",
-                "appearance-none"
-              )}
-            >
-              <option value="">
-                {isLoadingList
-                  ? 'Cargando...'
-                  : clientProviders.length === 0
-                    ? `No hay ${selectedType}s disponibles`
-                    : `Selecciona un ${selectedType}`
-                }
-              </option>
-              {clientProviders.map((provider) => (
-                <option key={provider.id} value={provider.id}>
-                  {provider.nombre_comercial} - Código Empresa {provider.id}
-                </option>
-              ))}
-            </select>
-
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              {isLoadingList ? (
-                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-gray-400" />
-              )}
-            </div>
-          </div>
-
-          {selectedClientProvider && (
-            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="flex items-center gap-3 mb-3">
-                <div className={cn(
-                  "w-8 h-8 rounded-lg flex items-center justify-center",
-                  selectedType === 'cliente'
-                    ? "bg-blue-100 dark:bg-blue-900/20"
-                    : "bg-green-100 dark:bg-green-900/20"
-                )}>
-                  {selectedType === 'cliente' ? (
-                    <UserCheck className="h-4 w-4 text-blue-600" />
-                  ) : (
-                    <Truck className="h-4 w-4 text-green-600" />
-                  )}
-                </div>
-                <div>
-                  <p className="font-medium text-foreground">{selectedClientProvider.nombre_comercial}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedClientProvider.tipo_entidad} • Código: {selectedClientProvider.codigo_interno}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Categoría:</span>
-                  <span className="ml-2 font-medium">{selectedClientProvider.categoria}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Estado:</span>
-                  <span className={cn(
-                    "ml-2 px-2 py-1 rounded-full text-xs font-medium",
-                    selectedClientProvider.estado === 'ACTIVO'
-                      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                      : "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
-                  )}>
-                    {selectedClientProvider.estado}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Total RUTs:</span>
-                  <span className="ml-2 font-medium">{selectedClientProvider.total_ruts}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">RUT Principal:</span>
-                  <span className="ml-2 font-medium">
-                    {selectedClientProvider.tiene_rut_principal ? 'Sí' : 'No'}
-                  </span>
-                </div>
-              </div>
-            </div>
           )}
         </div>
       </div>
 
-      {/* RUT Batch Upload - Only show when client/provider is selected */}
-      {selectedClientProvider && (
+      {/* RUT Batch Upload - Only show when type is selected */}
+      {selectedAccountingClient && selectedType && (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
           <div className="space-y-6">
             {/* Header */}
@@ -308,7 +327,7 @@ export default function TercerosPage() {
                 Carga Masiva de RUTs
               </h3>
               <p className="text-sm text-muted-foreground">
-                Sube múltiples archivos RUT para {selectedClientProvider.nombre_comercial}
+                Sube múltiples archivos RUT para {selectedAccountingClient.razon_social} ({selectedType === 'cliente' ? 'Clientes' : 'Proveedores'})
               </p>
             </div>
 
@@ -376,18 +395,31 @@ export default function TercerosPage() {
 
               {/* Success Message */}
               {extractionResults && !isExtracting && (
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <div className="text-sm">
-                      <p className="text-green-800 dark:text-green-200 font-medium">
-                        ¡Extracción completada!
-                      </p>
-                      <p className="text-green-700 dark:text-green-300">
-                        {extractionResults.successful_extractions} de {extractionResults.total_files} archivos procesados exitosamente
-                      </p>
+                <div className="space-y-4">
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <div className="text-sm">
+                        <p className="text-green-800 dark:text-green-200 font-medium">
+                          ¡Extracción completada!
+                        </p>
+                        <p className="text-green-700 dark:text-green-300">
+                          {extractionResults.successful_extractions} de {extractionResults.total_files} archivos procesados exitosamente
+                        </p>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Generate Excel Button */}
+                  {extractionResults.successful_extractions > 0 && (
+                    <button
+                      onClick={handleGenerateExcel}
+                      className="w-full btn-primary flex items-center justify-center gap-2"
+                    >
+                      <Download className="h-5 w-5" />
+                      Generar Formato {selectedType === 'cliente' ? 'Clientes' : 'Proveedores'}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -404,6 +436,7 @@ export default function TercerosPage() {
       )}
 
       {/* Content Area - Currently Empty */}
+      {selectedType && (
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-8">
         <div className="text-center space-y-4">
           <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto">
@@ -419,6 +452,9 @@ export default function TercerosPage() {
           </div>
         </div>
       </div>
+      )}
+      </>
+      )}
     </div>
   )
 }
