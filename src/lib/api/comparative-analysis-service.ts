@@ -1,3 +1,5 @@
+import { getAuthHeaders } from '@/lib/utils/api-helpers'
+
 // Types for Comparative Analysis API response
 export interface VariationAnalysis {
   field_name: string
@@ -40,15 +42,7 @@ export interface UploadProgress {
 }
 
 class ComparativeAnalysisService {
-  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/compliance`
-
-  private getHeaders(): HeadersInit {
-    return {
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
-      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
-    }
-  }
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'}/api/v1/compliance`
 
   async analyzeDeclarationComparative(
     currentYearFile: File,
@@ -68,11 +62,14 @@ class ComparativeAnalysisService {
     formData.append('previous_year_file', previousYearFile)
 
     try {
+      const authHeaders = getAuthHeaders()
+      const { 'Content-Type': _, ...headersWithoutContentType } = authHeaders as Record<string, string>
+
       const response = await fetch(`${this.baseUrl}/analyze/declaration/comparative`, {
         method: 'POST',
         body: formData,
         mode: 'cors',
-        headers: this.getHeaders()
+        headers: headersWithoutContentType
       })
 
       if (!response.ok) {
@@ -162,9 +159,12 @@ class ComparativeAnalysisService {
       xhr.timeout = 600000 // 10 minutes timeout
 
       // Add headers for CORS and Authentication
-      xhr.setRequestHeader('Accept', 'application/json')
-      xhr.setRequestHeader('Authorization', `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`)
-      xhr.setRequestHeader('x-user-id', process.env.NEXT_PUBLIC_USER_ID || '')
+      const authHeaders = getAuthHeaders() as Record<string, string>
+      Object.entries(authHeaders).forEach(([key, value]) => {
+        if (key !== 'Content-Type') {
+          xhr.setRequestHeader(key, value)
+        }
+      })
 
       // Don't set Content-Type - let browser set it with boundary for multipart/form-data
       xhr.send(formData)

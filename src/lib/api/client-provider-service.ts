@@ -1,3 +1,5 @@
+import { getAuthHeaders } from '@/lib/utils/api-helpers'
+
 export interface ClientProvider {
   id: number
   tipo_entidad: 'CLIENTE' | 'PROVEEDOR'
@@ -73,20 +75,12 @@ export interface CreateClientProviderRequest {
 }
 
 class ClientProviderService {
-  private baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'
-
-  private getHeaders(): HeadersInit {
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
-      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
-    }
-  }
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'}/api/v1`
 
   async getClientProviders(tipoEntidad: 'CLIENTE' | 'PROVEEDOR'): Promise<ClientProviderResponse> {
     try {
       const response = await fetch(`${this.baseUrl}/clientes-proveedores/?tipo_entidad=${tipoEntidad}`, {
-        headers: this.getHeaders()
+        headers: getAuthHeaders()
       })
 
       if (!response.ok) {
@@ -107,7 +101,7 @@ class ClientProviderService {
     try {
       const response = await fetch(`${this.baseUrl}/clientes-proveedores/`, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: getAuthHeaders(),
         body: JSON.stringify(data)
       })
 
@@ -137,7 +131,7 @@ class ClientProviderService {
   async getClientProviderRuts(clientProviderId: number): Promise<ClientProviderRutsResponse> {
     try {
       const response = await fetch(`${this.baseUrl}/clientes-proveedores/${clientProviderId}/ruts`, {
-        headers: this.getHeaders()
+        headers: getAuthHeaders()
       })
 
       if (!response.ok) {

@@ -1,3 +1,5 @@
+import { getAuthHeaders } from '@/lib/utils/api-helpers'
+
 // Types for Invoice extraction API response
 export interface InvoiceItem {
   codigo: string
@@ -62,14 +64,7 @@ export interface UploadProgress {
 }
 
 class InvoiceService {
-  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/contabilidad`
-
-  private getAuthHeaders(): Record<string, string> {
-    return {
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
-      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
-    }
-  }
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'}/api/v1/contabilidad`
 
   async extractInvoiceData(
     file: File,
@@ -134,10 +129,11 @@ class InvoiceService {
       xhr.timeout = 300000 // 5 minutes timeout
 
       // Add headers for CORS and Authentication
-      xhr.setRequestHeader('Accept', 'application/json')
-      const authHeaders = this.getAuthHeaders()
+      const authHeaders = getAuthHeaders() as Record<string, string>
       Object.entries(authHeaders).forEach(([key, value]) => {
-        xhr.setRequestHeader(key, value)
+        if (key !== 'Content-Type') {
+          xhr.setRequestHeader(key, value)
+        }
       })
 
       // Don't set Content-Type - let browser set it with boundary for multipart/form-data

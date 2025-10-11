@@ -1,3 +1,5 @@
+import { getAuthHeaders } from '@/lib/utils/api-helpers'
+
 // Types for RUT extraction API response
 export interface RepresentanteLegal {
   tipo_representacion: string
@@ -116,15 +118,7 @@ export interface UploadProgress {
 }
 
 class RutService {
-  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/contabilidad`
-
-  private getHeaders(): HeadersInit {
-    return {
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
-      'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
-    }
-  }
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'}/api/v1/contabilidad`
 
   async extractRutFromFilesWithClient(
     files: File[],
@@ -141,8 +135,8 @@ class RutService {
 
     const formData = new FormData()
 
-    // Agregar el ID del cliente/proveedor
-    formData.append('cliente_proveedor_id', clientProviderId.toString())
+    // Agregar el código de empresa
+    formData.append('codigo_empresa', clientProviderId.toString())
 
     // Agregar todos los archivos con la misma key 'files'
     files.forEach((file) => {
@@ -150,13 +144,13 @@ class RutService {
     })
 
     try {
+      const authHeaders = getAuthHeaders()
+      const { 'Content-Type': _, ...headersWithoutContentType } = authHeaders as Record<string, string>
+
       const response = await fetch(`${this.baseUrl}/extraer/rut/lote/con-cliente`, {
         method: 'POST',
         body: formData,
-        headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
-          'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
-        }
+        headers: headersWithoutContentType
       })
 
       if (!response.ok) {
@@ -197,16 +191,14 @@ class RutService {
     })
 
     try {
+      const authHeaders = getAuthHeaders()
+      const { 'Content-Type': _, ...headersWithoutContentType } = authHeaders as Record<string, string>
+
       const response = await fetch(`${this.baseUrl}/extraer/rut/lote`, {
         method: 'POST',
         body: formData,
         mode: 'cors',
-        headers: {
-          // Don't set Content-Type, let browser set it with boundary
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`,
-          'x-user-id': process.env.NEXT_PUBLIC_USER_ID || ''
-        }
+        headers: headersWithoutContentType
       })
 
       if (!response.ok) {
@@ -289,9 +281,12 @@ class RutService {
       xhr.timeout = 300000 // 5 minutes timeout
 
       // Add headers for CORS and Authentication
-      xhr.setRequestHeader('Accept', 'application/json')
-      xhr.setRequestHeader('Authorization', `Bearer ${process.env.NEXT_PUBLIC_AUTH_TOKEN}`)
-      xhr.setRequestHeader('x-user-id', process.env.NEXT_PUBLIC_USER_ID || '')
+      const authHeaders = getAuthHeaders() as Record<string, string>
+      Object.entries(authHeaders).forEach(([key, value]) => {
+        if (key !== 'Content-Type') {
+          xhr.setRequestHeader(key, value)
+        }
+      })
 
       // Don't set Content-Type - let browser set it with boundary for multipart/form-data
       xhr.send(formData)
@@ -302,7 +297,7 @@ class RutService {
     try {
       const response = await fetch(`${this.baseUrl}/ruts?page=${page}&page_size=${pageSize}`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: getAuthHeaders()
       })
 
       if (!response.ok) {
@@ -324,10 +319,7 @@ class RutService {
     try {
       const response = await fetch(`${this.baseUrl}/ruts/${nit}/estado`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           new_state: newState
         })
@@ -358,9 +350,7 @@ class RutService {
     try {
       const response = await fetch(`${this.baseUrl}/ruts/${nit}`, {
         method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        }
+        headers: getAuthHeaders()
       })
 
       if (!response.ok) {
