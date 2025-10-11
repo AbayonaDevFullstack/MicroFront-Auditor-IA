@@ -15,12 +15,12 @@ export interface AccountingClientResponse {
   items: AccountingClient[]
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'
-
 class AccountingClientService {
+  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'}/api/v1`
+
   async getAccountingClients(): Promise<AccountingClientResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/contabilidad-clientes`, {
+      const response = await fetch(`${this.baseUrl}/contabilidad-clientes`, {
         method: 'GET',
         headers: getAuthHeaders(),
       })
